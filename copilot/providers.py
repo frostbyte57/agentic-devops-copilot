@@ -76,6 +76,32 @@ def _model(provider: str, tier: str) -> str:
     return os.environ.get(_MODEL_ENV[provider][tier], _DEFAULT_MODELS[provider][tier])
 
 
+def catalog() -> list[dict]:
+    """Describe every provider for the configuration UI.
+
+    Returns the default reasoning/fast model ids and whether the provider needs
+    an API key or a local server, so the frontend can render sensible fields.
+    """
+    meta = {
+        "anthropic": {"label": "Anthropic", "kind": "paid", "needs_key": "ANTHROPIC_API_KEY"},
+        "openai": {"label": "OpenAI", "kind": "paid", "needs_key": "OPENAI_API_KEY"},
+        "local": {"label": "Local (Ollama / LM Studio)", "kind": "local", "needs_key": None},
+    }
+    out = []
+    for name in SUPPORTED:
+        out.append(
+            {
+                "id": name,
+                "label": meta[name]["label"],
+                "kind": meta[name]["kind"],
+                "needs_key": meta[name]["needs_key"],
+                "default_reasoning_model": _DEFAULT_MODELS[name][REASONING],
+                "default_fast_model": _DEFAULT_MODELS[name][FAST],
+            }
+        )
+    return out
+
+
 def resolve(provider: str | None = None) -> ProviderConfig:
     """Build the :class:`ProviderConfig` for ``provider`` (or the active one)."""
     name = (provider or active_provider()).strip().lower()
