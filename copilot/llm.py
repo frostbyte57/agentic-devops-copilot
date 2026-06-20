@@ -62,8 +62,9 @@ def make_llm(
         from langchain_openai import ChatOpenAI
     except ImportError as exc:  # pragma: no cover - depends on optional extra
         raise ImportError(
-            f"COPILOT_PROVIDER={cfg.name!r} needs langchain-openai. "
-            f"Install it with:  pip install 'aws-devops-copilot[{cfg.name}]'"
+            f"The {cfg.name!r} provider needs langchain-openai. Install it with:  "
+            f"pip install 'aws-devops-copilot[{cfg.name}]'  — or switch to Anthropic "
+            f"in the model picker (it works out of the box)."
         ) from exc
 
     kwargs = {"model": model_id, "max_tokens": max_tokens, "timeout": timeout}
