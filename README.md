@@ -90,12 +90,50 @@ OpenAI-compatible server — Ollama (`:11434/v1`, default), LM Studio
 the structured-output nodes (planner/critic/synthesizer) need a local model with
 tool-calling support — recent instruct models (llama3.1, qwen2.5, mistral) work.
 
-## Run
+## Run (CLI)
 
 ```bash
 copilot investigate "ECS service api-prod returning 503s for 20 minutes"
 copilot investigate --no-code-exec --json "RDS db-prod CPU at 100% since 14:00"
 ```
+
+## Run (Web UI)
+
+A ChatGPT-style web app (`web/`, React + React Router on Vite) talks to a small
+FastAPI backend that streams each investigation step live. The chat surface is
+built with the [shadcn-chatbot-kit](https://github.com/Blazity/shadcn-chatbot-kit)
+(`src/components/ui/chat.tsx` et al., on top of shadcn/ui) — auto-scrolling
+message list, markdown rendering, prompt suggestions, and a stop button. It's a
+static SPA — no Next.js, no Vercel, no Node server. The **⚙ Configuration** panel
+switches provider/model, sets the AWS region, holds **all your API keys**
+(Anthropic, OpenAI, GitHub), and toggles the code executor — no `.env` edits or
+restarts needed.
+
+**One command** (installs nothing — run `make install` first):
+
+```bash
+make install   # Python (all extras) + web deps
+make dev       # API on :8000 + web UI on :3000 — Ctrl-C stops both
+```
+
+Then open **http://localhost:3000**. Other targets: `make backend`,
+`make frontend`, `make test`, `make help`.
+
+<details><summary>…or run the two processes manually</summary>
+
+```bash
+pip install -e '.[server]'
+uvicorn copilot.server:app --reload --port 8000     # terminal 1
+cd web && npm install && npm run dev                # terminal 2
+```
+</details>
+
+Keys and settings entered in the UI are persisted to
+`~/.config/aws-devops-copilot/settings.json` (a `0600` file, outside the repo)
+and loaded on the next start, so you configure once. The frontend reads the
+backend URL from `web/.env` (`VITE_API_BASE`, default `http://localhost:8000`).
+Build static assets for deployment anywhere with `cd web && npm run build`
+(output in `web/dist/`).
 
 ## Test
 
