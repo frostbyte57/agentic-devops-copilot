@@ -1,20 +1,12 @@
-"""Provider registry — pick paid or local models with one env var.
+"""Provider registry — resolve the active provider's model and connection details.
 
-The graph never names a concrete model. Nodes ask for a *tier*:
+The whole copilot runs on a *single* model. The provider, the model override, and
+the API keys all come from :mod:`copilot.settings_store` (the UI is the source of
+truth) — nothing is read from the environment.
 
-  - ``reasoning``  the slow/expensive thinker (planner, critic, synthesizer, code)
-  - ``fast``       the high-volume specialist summarizers (logs, metrics, diff)
-
-This module maps ``(provider, tier)`` to a real model id and the connection
-details for that provider. Switch the whole copilot between Anthropic, OpenAI
-and a laptop-local server by setting one variable::
-
-    COPILOT_PROVIDER=anthropic   # paid, default — needs ANTHROPIC_API_KEY
-    COPILOT_PROVIDER=openai      # paid           — needs OPENAI_API_KEY
-    COPILOT_PROVIDER=local       # free, on-device — Ollama / LM Studio / vLLM
-
-Every concrete model id is overridable from the environment, so you are never
-stuck with the defaults baked in here.
+  - ``anthropic``  paid, default — needs the Anthropic key
+  - ``openai``     paid           — needs the OpenAI key
+  - ``local``      free, on-device — Ollama / LM Studio / vLLM
 
 Local models are reached through their OpenAI-compatible endpoint (Ollama, LM
 Studio, vLLM and llama.cpp all expose one), so the same ``ChatOpenAI`` client
@@ -23,29 +15,21 @@ drives both ``openai`` and ``local`` — only the base URL and key change.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 
-# Tier names used throughout the graph.
-REASONING = "reasoning"
-FAST = "fast"
+from . import settings_store
 
-# (provider, tier) -> default model id. Each is overridable via env (see below).
-_DEFAULT_MODELS: dict[str, dict[str, str]] = {
-    "anthropic": {REASONING: "claude-opus-4-8", FAST: "claude-sonnet-4-6"},
-    "openai": {REASONING: "gpt-4o", FAST: "gpt-4o-mini"},
+# provider -> default model id. Overridable per provider from the settings store.
+_DEFAULT_MODEL: dict[str, str] = {
+    "anthropic": "claude-opus-4-8",
+    "openai": "gpt-4o",
     # Pick any model you have pulled locally, e.g. `ollama pull llama3.1`.
-    "local": {REASONING: "llama3.1", FAST: "llama3.1"},
+    "local": "llama3.1",
 }
 
-# Per-provider env var that overrides the model id for a tier.
-_MODEL_ENV: dict[str, dict[str, str]] = {
-    "anthropic": {REASONING: "COPILOT_ANTHROPIC_REASONING_MODEL", FAST: "COPILOT_ANTHROPIC_FAST_MODEL"},
-    "openai": {REASONING: "COPILOT_OPENAI_REASONING_MODEL", FAST: "COPILOT_OPENAI_FAST_MODEL"},
-    "local": {REASONING: "COPILOT_LOCAL_REASONING_MODEL", FAST: "COPILOT_LOCAL_FAST_MODEL"},
-}
+DEFAULT_LOCAL_BASE_URL = "http://localhost:11434/v1"
 
-SUPPORTED = tuple(_DEFAULT_MODELS)
+SUPPORTED = tuple(_DEFAULT_MODEL)
 
 
 @dataclass(frozen=True)
@@ -53,34 +37,26 @@ class ProviderConfig:
     """Everything needed to build a chat client for the active provider."""
 
     name: str
-    reasoning_model: str
-    fast_model: str
+    model: str
     base_url: str | None = None
     api_key: str | None = None
 
-    def model_for(self, tier: str) -> str:
-        return self.reasoning_model if tier == REASONING else self.fast_model
-
 
 def active_provider() -> str:
-    """The provider selected via ``COPILOT_PROVIDER`` (default ``anthropic``)."""
-    name = os.environ.get("COPILOT_PROVIDER", "anthropic").strip().lower()
-    if name not in _DEFAULT_MODELS:
+    """The provider selected in the settings store (default ``anthropic``)."""
+    name = (settings_store.get().get("provider") or "anthropic").strip().lower()
+    if name not in _DEFAULT_MODEL:
         raise ValueError(
-            f"Unknown COPILOT_PROVIDER={name!r}. Choose one of: {', '.join(SUPPORTED)}."
+            f"Unknown provider {name!r}. Choose one of: {', '.join(SUPPORTED)}."
         )
     return name
-
-
-def _model(provider: str, tier: str) -> str:
-    return os.environ.get(_MODEL_ENV[provider][tier], _DEFAULT_MODELS[provider][tier])
 
 
 def catalog() -> list[dict]:
     """Describe every provider for the configuration UI.
 
-    Returns the default reasoning/fast model ids and whether the provider needs
-    an API key or a local server, so the frontend can render sensible fields.
+    Returns the default model id and whether the provider needs an API key or a
+    local server, so the frontend can render sensible fields.
     """
     meta = {
         "anthropic": {"label": "Anthropic", "kind": "paid", "needs_key": "ANTHROPIC_API_KEY"},
@@ -95,8 +71,7 @@ def catalog() -> list[dict]:
                 "label": meta[name]["label"],
                 "kind": meta[name]["kind"],
                 "needs_key": meta[name]["needs_key"],
-                "default_reasoning_model": _DEFAULT_MODELS[name][REASONING],
-                "default_fast_model": _DEFAULT_MODELS[name][FAST],
+                "default_model": _DEFAULT_MODEL[name],
             }
         )
     return out
@@ -105,31 +80,29 @@ def catalog() -> list[dict]:
 def resolve(provider: str | None = None) -> ProviderConfig:
     """Build the :class:`ProviderConfig` for ``provider`` (or the active one)."""
     name = (provider or active_provider()).strip().lower()
-    if name not in _DEFAULT_MODELS:
+    if name not in _DEFAULT_MODEL:
         raise ValueError(
             f"Unknown provider {name!r}. Choose one of: {', '.join(SUPPORTED)}."
         )
 
-    reasoning = _model(name, REASONING)
-    fast = _model(name, FAST)
+    model = settings_store.model_for(name) or _DEFAULT_MODEL[name]
 
     if name == "local":
         # Ollama's OpenAI-compatible endpoint by default; LM Studio uses
         # http://localhost:1234/v1, vLLM http://localhost:8000/v1.
-        base_url = os.environ.get("COPILOT_LOCAL_BASE_URL", "http://localhost:11434/v1")
+        base_url = settings_store.get().get("local_base_url") or DEFAULT_LOCAL_BASE_URL
         # Local servers ignore the key but the OpenAI client requires a non-empty one.
-        api_key = os.environ.get("COPILOT_LOCAL_API_KEY", "not-needed")
+        api_key = settings_store.key("local") or "not-needed"
     elif name == "openai":
-        base_url = os.environ.get("OPENAI_BASE_URL")  # None => api.openai.com
-        api_key = os.environ.get("OPENAI_API_KEY")
-    else:  # anthropic — key is read from ANTHROPIC_API_KEY by the client itself
+        base_url = None  # api.openai.com
+        api_key = settings_store.key("openai")
+    else:  # anthropic
         base_url = None
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        api_key = settings_store.key("anthropic")
 
     return ProviderConfig(
         name=name,
-        reasoning_model=reasoning,
-        fast_model=fast,
+        model=model,
         base_url=base_url,
         api_key=api_key,
     )

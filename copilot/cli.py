@@ -6,14 +6,13 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Optional
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 
-from . import providers
+from . import providers, settings_store
 from .aws.adapters import AwsAdapters
 from .deps import Deps
 from .graph import build_graph
@@ -56,12 +55,12 @@ def investigate(
     provider: Optional[str] = typer.Option(
         None,
         "--provider",
-        help="LLM provider: anthropic | openai | local (overrides COPILOT_PROVIDER).",
+        help="LLM provider for this run: anthropic | openai | local.",
     ),
     as_json: bool = typer.Option(False, "--json", help="Print the report as JSON."),
 ) -> None:
     if provider:
-        os.environ["COPILOT_PROVIDER"] = provider
+        settings_store.get()["provider"] = provider
     try:
         cfg = providers.resolve()
     except ValueError as exc:
@@ -69,12 +68,14 @@ def investigate(
         raise typer.Exit(2)
     console.print(
         f"  [dim]provider:[/dim] [magenta]{cfg.name}[/magenta] "
-        f"[dim](reasoning={cfg.reasoning_model}, fast={cfg.fast_model})[/dim]"
+        f"[dim](model={cfg.model})[/dim]"
     )
 
     deps = Deps(
-        aws=AwsAdapters.from_env(region=region, profile=profile),
+        aws=AwsAdapters.from_settings(region=region, profile=profile),
         allow_code_exec=not no_code_exec,
+        github_token=settings_store.key("github"),
+        github_repo=settings_store.get().get("github_repo"),
     )
     graph = build_graph(deps)
 
@@ -103,9 +104,9 @@ def models(
         None, "--provider", help="Inspect a specific provider instead of the active one."
     ),
 ) -> None:
-    """Show the active provider and the model resolved for each tier."""
+    """Show the active provider and the model it resolves to."""
     if provider:
-        os.environ["COPILOT_PROVIDER"] = provider
+        settings_store.get()["provider"] = provider
     try:
         cfg = providers.resolve()
     except ValueError as exc:
@@ -114,12 +115,11 @@ def models(
 
     lines = [
         f"[bold]Provider:[/bold] {cfg.name}",
-        f"[bold]Reasoning tier:[/bold] {cfg.reasoning_model}   [dim](planner, critic, synthesizer, code)[/dim]",
-        f"[bold]Fast tier:[/bold]      {cfg.fast_model}   [dim](logs, metrics, github diff)[/dim]",
+        f"[bold]Model:[/bold] {cfg.model}",
     ]
     if cfg.base_url:
         lines.append(f"[bold]Endpoint:[/bold] {cfg.base_url}")
-    lines.append(f"\n[dim]Switch with[/dim] COPILOT_PROVIDER=anthropic|openai|local [dim]or[/dim] --provider")
+    lines.append("\n[dim]Configure in the web UI, or pass[/dim] --provider")
     console.print(Panel("\n".join(lines), title="LLM configuration", border_style="magenta"))
 
 

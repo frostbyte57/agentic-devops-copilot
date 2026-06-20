@@ -22,8 +22,19 @@ class AwsAdapters:
         self._ecs = session.client("ecs")
 
     @classmethod
-    def from_env(cls, region: str | None = None, profile: str | None = None) -> "AwsAdapters":
-        return cls(build_session(region=region, profile=profile))
+    def from_settings(cls, region: str | None = None, profile: str | None = None) -> "AwsAdapters":
+        """Build adapters from the UI settings store (region/keys), with optional overrides."""
+        from .. import settings_store
+
+        cfg = settings_store.get()
+        return cls(
+            build_session(
+                region=region or cfg.get("region"),
+                access_key_id=settings_store.key("aws_access_key_id"),
+                secret_access_key=settings_store.key("aws_secret_access_key"),
+                profile=profile,
+            )
+        )
 
     # --- CloudWatch Logs Insights -----------------------------------------
 

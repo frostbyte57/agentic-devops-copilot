@@ -27,3 +27,9 @@ class Deps:
 
     runbooks_dir: str | None = None
     """Override for the runbook corpus directory (defaults to the packaged one)."""
+
+    github_token: str | None = None
+    """GitHub token for the deploy-diff node (from the UI settings store)."""
+
+    github_repo: str | None = None
+    """``owner/repo`` for the deploy-diff node (from the UI settings store)."""

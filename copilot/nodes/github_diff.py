@@ -1,13 +1,11 @@
 """GitHub deploy-diff node — flag risky changes in the most recent deploy.
 
-Optional: needs ``GITHUB_TOKEN`` + ``GITHUB_REPO`` and the ``github`` extra
-(PyGithub). If either is missing, it degrades gracefully to an info-level note so
-the rest of the investigation still runs.
+Optional: needs a GitHub token + ``owner/repo`` (set in the UI) and the ``github``
+extra (PyGithub). If either is missing, it degrades gracefully to an info-level
+note so the rest of the investigation still runs.
 """
 
 from __future__ import annotations
-
-import os
 
 from ..deps import Deps
 from ..llm import SONNET
@@ -22,8 +20,8 @@ the specific risk. If nothing looks risky, say so plainly."""
 
 def make_github_node(deps: Deps):
     def run(state: State) -> dict:
-        repo_name = os.getenv("GITHUB_REPO")
-        token = os.getenv("GITHUB_TOKEN")
+        repo_name = deps.github_repo
+        token = deps.github_token
         if not (repo_name and token):
             return {"evidence": [Evidence(source="github", summary="GitHub not configured; skipped deploy diff.", severity="info")]}
 
