@@ -1,14 +1,14 @@
-"""Persistent settings for the web UI.
+"""Persistent settings — the single source of truth for runtime configuration.
 
-The UI is the source of truth for runtime configuration — provider, per-provider
-model overrides, AWS region, the code-executor toggle, and **all API keys**. We
-persist it to a JSON file in the user config dir (not the repo) so keys set in
-the UI survive a restart, and mirror everything into ``os.environ`` on load so
-the existing ``providers.resolve()`` / ``AwsAdapters.from_env()`` keep working
-untouched.
+The UI owns everything: provider, the per-provider model override, AWS region and
+credentials, the GitHub token/repo, the code-executor toggle, and all API keys.
+We persist it to a JSON file in the user config dir (not the repo) so values set
+in the UI survive a restart. Nothing is read from or written to the process
+environment — the rest of the app reads the config straight from here via
+``get()`` (and the typed helpers ``key()`` / ``model_for()``).
 
-Keys are stored in plaintext in a ``0600`` file under ``~/.config`` — acceptable
-for a local single-user dev tool, the same trust level as a ``.env``.
+Secrets are stored in plaintext in a ``0600`` file under ``~/.config`` —
+acceptable for a local single-user tool.
 """
 
 from __future__ import annotations
@@ -18,15 +18,12 @@ import os
 from pathlib import Path
 from typing import Any
 
-# provider/feature -> the env var the rest of the app already reads.
-KEY_ENV = {
-    "anthropic": "ANTHROPIC_API_KEY",
-    "openai": "OPENAI_API_KEY",
-    "github": "GITHUB_TOKEN",
-}
+_config: dict[str, Any] | None = None
 
 
 def _path() -> Path:
+    # Storage location only (not a config value); the test suite points this at a
+    # temp file via COPILOT_SETTINGS_FILE.
     override = os.environ.get("COPILOT_SETTINGS_FILE")
     if override:
         return Path(override)
@@ -36,23 +33,21 @@ def _path() -> Path:
 
 def _default() -> dict[str, Any]:
     return {
-        "provider": os.environ.get("COPILOT_PROVIDER", "anthropic"),
-        "region": os.environ.get("AWS_REGION"),
-        "local_base_url": os.environ.get("COPILOT_LOCAL_BASE_URL"),
+        "provider": "anthropic",
+        "region": None,
+        "local_base_url": None,
+        "github_repo": None,
         "allow_code_exec": True,
-        # per-provider model overrides: {provider: {"reasoning": id, "fast": id}}
+        # per-provider model override: {provider: model_id}
         "models": {},
-        # provider/feature -> api key
+        # name -> secret: anthropic / openai / github / aws_access_key_id / aws_secret_access_key
         "keys": {},
     }
 
 
-def _model_env(provider: str, tier: str) -> str:
-    return f"COPILOT_{provider.upper()}_{tier.upper()}_MODEL"
-
-
 def load() -> dict[str, Any]:
-    """Read persisted settings (merged over defaults) and apply them to env."""
+    """Read persisted settings (merged over defaults) into the in-memory config."""
+    global _config
     data = _default()
     path = _path()
     if path.exists():
@@ -60,34 +55,39 @@ def load() -> dict[str, Any]:
             data.update(json.loads(path.read_text()))
         except (json.JSONDecodeError, OSError):
             pass  # corrupt/unreadable file — fall back to defaults
-    apply_to_env(data)
-    return data
+    _config = data
+    return _config
 
 
-def save(data: dict[str, Any]) -> None:
+def get() -> dict[str, Any]:
+    """The live config dict, loaded from disk on first access."""
+    return _config if _config is not None else load()
+
+
+def save(data: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Persist the config to disk (and adopt ``data`` as the live config if given)."""
+    global _config
+    if data is not None:
+        _config = data
+    cfg = get()
     path = _path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2))
+    path.write_text(json.dumps(cfg, indent=2))
     try:
         path.chmod(0o600)
     except OSError:
         pass
-    apply_to_env(data)
+    return cfg
 
 
-def apply_to_env(data: dict[str, Any]) -> None:
-    """Mirror persisted settings into the process environment."""
-    if data.get("provider"):
-        os.environ["COPILOT_PROVIDER"] = data["provider"]
-    if data.get("region"):
-        os.environ["AWS_REGION"] = data["region"]
-    if data.get("local_base_url"):
-        os.environ["COPILOT_LOCAL_BASE_URL"] = data["local_base_url"]
-    for provider, tiers in (data.get("models") or {}).items():
-        for tier, model_id in (tiers or {}).items():
-            if model_id:
-                os.environ[_model_env(provider, tier)] = model_id
-    for name, value in (data.get("keys") or {}).items():
-        env = KEY_ENV.get(name)
-        if env and value:
-            os.environ[env] = value
+def key(name: str) -> str | None:
+    """A stored secret by name, or ``None`` if unset/blank."""
+    return (get().get("keys") or {}).get(name) or None
+
+
+def model_for(provider: str) -> str | None:
+    """The model override for a provider (tolerates the legacy tier dict shape)."""
+    value = (get().get("models") or {}).get(provider)
+    if isinstance(value, dict):  # legacy {"reasoning": id, "fast": id}
+        value = value.get("reasoning") or value.get("fast")
+    return value or None

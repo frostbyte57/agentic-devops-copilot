@@ -3,30 +3,40 @@ export type ProviderInfo = {
   label: string;
   kind: "paid" | "local";
   needs_key: string | null;
-  default_reasoning_model: string;
-  default_fast_model: string;
+  default_model: string;
 };
 
 export type Settings = {
   provider: string;
-  reasoning_model: string;
-  fast_model: string;
+  model: string;
   region: string | null;
   local_base_url: string | null;
+  github_repo: string | null;
   allow_code_exec: boolean;
   has_anthropic_key: boolean;
   has_openai_key: boolean;
   has_github_token: boolean;
+  has_aws_credentials: boolean;
 };
 
 // What we POST back — keys are write-only (blank = keep existing).
 export type SettingsUpdate = Omit<
   Settings,
-  "has_anthropic_key" | "has_openai_key" | "has_github_token"
+  | "has_anthropic_key"
+  | "has_openai_key"
+  | "has_github_token"
+  | "has_aws_credentials"
 > & {
   anthropic_key?: string | null;
   openai_key?: string | null;
   github_token?: string | null;
+  aws_access_key_id?: string | null;
+  aws_secret_access_key?: string | null;
+};
+
+export type ModelOption = {
+  id: string;
+  label: string;
 };
 
 export type StepEvidence = {

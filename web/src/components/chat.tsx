@@ -1,9 +1,10 @@
 import { useRef, useState } from "react";
 
+import { ModelPicker } from "@/components/model-picker";
 import { Chat as ChatUI } from "@/components/ui/chat";
 import { type Message } from "@/components/ui/chat-message";
 import { investigate } from "@/lib/api";
-import type { Report, StepEvidence } from "@/lib/types";
+import type { ProviderInfo, Report, Settings, StepEvidence } from "@/lib/types";
 
 const SUGGESTIONS = [
   "ECS service api-prod returning 503s for 20 minutes",
@@ -54,7 +55,15 @@ function renderMarkdown(a: Acc): string {
   return out.join("\n");
 }
 
-export function Chat() {
+export function Chat({
+  providers,
+  settings,
+  onSettingsChange,
+}: {
+  providers: ProviderInfo[];
+  settings: Settings | null;
+  onSettingsChange: (s: Settings) => void;
+}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -88,7 +97,7 @@ export function Chat() {
       text,
       {
         onMeta: (m) => {
-          acc.meta = `${m.provider} · ${m.reasoning_model}`;
+          acc.meta = `${m.provider} · ${m.model}`;
           setAssistant(botId, acc);
         },
         onStep: (s) => {
@@ -134,6 +143,15 @@ export function Chat() {
         stop={() => abortRef.current?.abort()}
         append={(msg) => run(msg.content)}
         suggestions={SUGGESTIONS}
+        inputFooter={
+          settings && providers.length > 0 ? (
+            <ModelPicker
+              providers={providers}
+              settings={settings}
+              onChange={onSettingsChange}
+            />
+          ) : null
+        }
       />
     </div>
   );

@@ -39,16 +39,19 @@ A LangGraph state graph orchestrates specialized agents:
    confidence.
 5. **Synthesizer** (Opus) emits the final structured `IncidentReport`.
 
-Models (via `langchain-anthropic`): `claude-opus-4-8` for planner/critic/
-synthesizer, `claude-sonnet-4-6` for the high-volume specialist summarizers.
+The copilot runs on a single model (default `claude-opus-4-8` via
+`langchain-anthropic`), used by every node.
 
 ## Setup
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -e .            # add ".[github]" for the deploy-diff node
-cp .env.example .env        # set ANTHROPIC_API_KEY + AWS creds
+pip install -e '.[server]'   # add ".[github]" for the deploy-diff node
 ```
+
+All configuration — provider, model, API keys, AWS region/credentials — is set
+in the web UI's **⚙ Configuration** panel and persisted outside the repo. Nothing
+is read from the environment.
 
 AWS access is **read-only** — see the IAM actions below. The copilot never holds
 write permissions.
@@ -59,36 +62,31 @@ cloudwatch:GetMetricData, ecs:Describe*, ecs:List*,
 elasticloadbalancing:Describe*
 ```
 
-Optionally set `COPILOT_READONLY_ROLE_ARN` to have the copilot assume a dedicated
-read-only role via STS.
+If you leave the AWS credentials blank, boto3 falls back to your host's default
+chain (shared `~/.aws` profile or instance role).
 
 ## Choosing a model provider
 
-Switch the whole copilot between paid APIs and a model running on your laptop
-with one variable. The graph asks for a *tier* (`reasoning` vs `fast`), so the
-roles stay the same no matter which provider you pick.
+The copilot runs on a single model and can switch between paid APIs and a model
+running on your laptop. Pick the provider and model in the UI (or `--provider` on
+the CLI); the model dropdown lists what your saved key can reach.
 
-| `COPILOT_PROVIDER` | Cost | Needs | Install |
+| Provider | Cost | Needs | Install |
 | --- | --- | --- | --- |
-| `anthropic` (default) | paid | `ANTHROPIC_API_KEY` | `pip install -e .` |
-| `openai` | paid | `OPENAI_API_KEY` | `pip install -e '.[openai]'` |
+| `anthropic` (default) | paid | Anthropic key | `pip install -e .` |
+| `openai` | paid | OpenAI key | `pip install -e '.[openai]'` |
 | `local` | free | a local server | `pip install -e '.[local]'` |
 
 ```bash
-copilot models                       # show the resolved models for the active provider
+copilot models                       # show the resolved model for the active provider
 copilot investigate --provider local "..."   # one-off override
-
-# Run fully on your laptop (no API key, nothing leaves the machine):
-ollama pull llama3.1 && ollama serve
-COPILOT_PROVIDER=local copilot investigate "..."
 ```
 
-Every model id is overridable (e.g. `COPILOT_OPENAI_REASONING_MODEL`,
-`COPILOT_LOCAL_FAST_MODEL`) and `COPILOT_LOCAL_BASE_URL` points at any
-OpenAI-compatible server — Ollama (`:11434/v1`, default), LM Studio
-(`:1234/v1`) or vLLM (`:8000/v1`). See `.env.example` for the full list. Note
-the structured-output nodes (planner/critic/synthesizer) need a local model with
-tool-calling support — recent instruct models (llama3.1, qwen2.5, mistral) work.
+For `local`, set the server URL in the UI (Agent tab) — any OpenAI-compatible
+endpoint: Ollama (`:11434/v1`, default), LM Studio (`:1234/v1`) or vLLM
+(`:8000/v1`). The structured-output nodes (planner/critic/synthesizer) need a
+local model with tool-calling support — recent instruct models (llama3.1,
+qwen2.5, mistral) work.
 
 ## Run (CLI)
 
@@ -105,9 +103,9 @@ built with the [shadcn-chatbot-kit](https://github.com/Blazity/shadcn-chatbot-ki
 (`src/components/ui/chat.tsx` et al., on top of shadcn/ui) — auto-scrolling
 message list, markdown rendering, prompt suggestions, and a stop button. It's a
 static SPA — no Next.js, no Vercel, no Node server. The **⚙ Configuration** panel
-switches provider/model, sets the AWS region, holds **all your API keys**
-(Anthropic, OpenAI, GitHub), and toggles the code executor — no `.env` edits or
-restarts needed.
+holds **all your credentials** (Anthropic, OpenAI, GitHub, AWS), the AWS region,
+and the code-executor toggle; the model is switched from the chat bar. Everything
+is handled in the UI — no env vars, no `.env`, no restarts.
 
 **One command** (installs nothing — run `make install` first):
 

@@ -1,15 +1,11 @@
-"""Chat-model factory — one place to pick the model per role *and* provider.
+"""Chat-model factory — one place to build the chat client for the active provider.
 
-Nodes ask for a *tier*, not a vendor model: ``OPUS`` for the reasoning-heavy
-planner/critic/synthesizer, ``SONNET`` for the high-volume specialist
-summarizers. These names are kept for readability, but they are really tier
-markers (reasoning vs fast). The concrete model — and whether it is a paid API
-or a model running on your laptop — is decided by ``COPILOT_PROVIDER`` and
-resolved in :mod:`copilot.providers`.
-
-    COPILOT_PROVIDER=anthropic   # paid  (ANTHROPIC_API_KEY)        — default
-    COPILOT_PROVIDER=openai      # paid  (OPENAI_API_KEY)
-    COPILOT_PROVIDER=local       # local (Ollama / LM Studio / vLLM)
+The whole copilot runs on a single model. Nodes historically passed a tier marker
+(``OPUS``/``SONNET``/``HAIKU``) as the first argument for readability; those are
+now cosmetic aliases — every call resolves to the one model, provider, and key
+chosen in the UI and read from :mod:`copilot.settings_store` via
+``providers.resolve()`` (anthropic / openai / local). Nothing is read from the
+environment.
 
 Anthropic-only notes (claude-api guidance):
 - Opus 4.8 uses *adaptive* thinking (``{"type": "adaptive"}``); the old
@@ -28,15 +24,12 @@ from __future__ import annotations
 from typing import Any
 
 from . import providers
-from .providers import FAST, REASONING
 
-# Tier markers. Kept named after the Anthropic tiers for readability; they map
-# to ``reasoning`` / ``fast`` regardless of which provider is active.
-OPUS = REASONING
-SONNET = FAST
-HAIKU = FAST
-
-_TIERS = {REASONING, FAST}
+# Cosmetic call-site markers — all map to the single active model. Kept so the
+# node call sites (``deps.llm(OPUS, ...)``) read clearly and don't need editing.
+OPUS = "opus"
+SONNET = "sonnet"
+HAIKU = "haiku"
 
 
 def make_llm(
@@ -45,20 +38,21 @@ def make_llm(
     thinking: bool = False,
     timeout: int = 120,
 ) -> Any:
-    """Build a chat client for a role, using the active provider.
+    """Build a chat client using the active provider's single model.
 
-    ``model`` is a tier marker (``OPUS``/``SONNET``/``HAIKU``, i.e. ``reasoning``
-    or ``fast``). Set ``thinking=True`` only on free-form reasoning calls; it is
-    honoured for Anthropic and ignored elsewhere.
+    ``model`` is an ignored cosmetic marker (``OPUS``/``SONNET``/``HAIKU``). Set
+    ``thinking=True`` only on free-form reasoning calls; it is honoured for
+    Anthropic and ignored elsewhere.
     """
-    tier = model if model in _TIERS else REASONING
     cfg = providers.resolve()
-    model_id = cfg.model_for(tier)
+    model_id = cfg.model
 
     if cfg.name == "anthropic":
         from langchain_anthropic import ChatAnthropic
 
         kwargs: dict = {"model": model_id, "max_tokens": max_tokens, "timeout": timeout}
+        if cfg.api_key:
+            kwargs["api_key"] = cfg.api_key
         if thinking:
             kwargs["thinking"] = {"type": "adaptive"}
         return ChatAnthropic(**kwargs)
