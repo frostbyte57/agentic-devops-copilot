@@ -19,7 +19,7 @@ $ copilot "ECS service api-prod has been returning 503s for 20 minutes"
   → Critic
   → Synthesizer
 
-╭────────────────────────── IncidentReport ✓ ──────────────────────────╮
+╭─────────────────────────── IncidentReport ───────────────────────────╮
 │ Root cause: Inefficient DB query (N+1) introduced in the last deploy. │
 │ Recommended fix: Add .select_related() to /users; scale ECS to 4.     │
 │ Confidence: 91%                                                       │
@@ -50,7 +50,7 @@ pip install -e '.[server]'   # add ".[github]" for the deploy-diff node
 ```
 
 All configuration — provider, model, API keys, AWS region/credentials — is set
-in the web UI's **⚙ Configuration** panel and persisted outside the repo. Nothing
+in the web UI's **Configuration** panel and persisted outside the repo. Nothing
 is read from the environment.
 
 AWS access is **read-only** — see the IAM actions below. The copilot never holds
@@ -102,7 +102,7 @@ FastAPI backend that streams each investigation step live. The chat surface is
 built with the [shadcn-chatbot-kit](https://github.com/Blazity/shadcn-chatbot-kit)
 (`src/components/ui/chat.tsx` et al., on top of shadcn/ui) — auto-scrolling
 message list, markdown rendering, prompt suggestions, and a stop button. It's a
-static SPA — no Next.js, no Vercel, no Node server. The **⚙ Configuration** panel
+static SPA — no Next.js, no Vercel, no Node server. The **Configuration** panel
 holds **all your credentials** (Anthropic, OpenAI, GitHub, AWS), the AWS region,
 and the code-executor toggle; the model is switched from the chat bar. Everything
 is handled in the UI — no env vars, no `.env`, no restarts.
