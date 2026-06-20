@@ -198,7 +198,7 @@ export function Chat({
     <ChatContainer className={className}>
       {isEmpty && append && suggestions ? (
         <PromptSuggestions
-          label="Try these prompts ✨"
+          label="Try these prompts"
           append={append}
           suggestions={suggestions}
         />
@@ -230,6 +230,10 @@ export function Chat({
               stop={handleStop}
               isGenerating={isGenerating}
               transcribeAudio={transcribeAudio}
+              // Lock the input while a run is in flight — no second prompt, no
+              // Enter-to-interrupt-and-resubmit — until it finishes.
+              disabled={isGenerating}
+              enableInterrupt={false}
             />
             {inputFooter && (
               <div className="mt-1.5 flex items-center px-1">{inputFooter}</div>

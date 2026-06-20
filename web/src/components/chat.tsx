@@ -12,10 +12,11 @@ const SUGGESTIONS = [
   "Latency spike on checkout-svc after the last deploy",
 ];
 
+// Short text label per severity (no marker for info).
 const SEV: Record<StepEvidence["severity"], string> = {
-  info: "🔹",
-  warning: "🟠",
-  critical: "🔴",
+  info: "",
+  warning: "warning",
+  critical: "critical",
 };
 
 // Live accumulator for the assistant turn, rendered to markdown as events arrive.
@@ -32,10 +33,11 @@ function renderMarkdown(a: Acc): string {
   for (const s of a.steps) {
     out.push(`\n**${s.label}**`);
     for (const e of s.evidence) {
-      out.push(`- ${SEV[e.severity]} \`${e.source}\` — ${e.summary}`);
+      const tag = SEV[e.severity] ? `**${SEV[e.severity]}** ` : "";
+      out.push(`- ${tag}\`${e.source}\` — ${e.summary}`);
     }
   }
-  if (a.error) out.push(`\n> ⚠️ ${a.error}`);
+  if (a.error) out.push(`\n> **Error:** ${a.error}`);
   if (a.report) {
     const r = a.report;
     out.push(`\n---\n### Incident Report · ${Math.round(r.confidence * 100)}% confidence`);
@@ -135,6 +137,7 @@ export function Chat({
         handleInputChange={(e) => setInput(e.target.value)}
         handleSubmit={(e) => {
           e?.preventDefault?.();
+          if (isGenerating) return; // one investigation at a time
           const text = input;
           setInput("");
           run(text);
