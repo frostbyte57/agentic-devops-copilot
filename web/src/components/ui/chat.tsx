@@ -35,6 +35,8 @@ interface ChatPropsBase {
   ) => void
   setMessages?: (messages: any[]) => void
   transcribeAudio?: (blob: Blob) => Promise<string>
+  /** Optional controls rendered on a row directly beneath the input. */
+  inputFooter?: React.ReactNode
 }
 
 interface ChatPropsWithoutSuggestions extends ChatPropsBase {
@@ -62,6 +64,7 @@ export function Chat({
   onRateResponse,
   setMessages,
   transcribeAudio,
+  inputFooter,
 }: ChatProps) {
   const lastMessage = messages.at(-1)
   const isEmpty = messages.length === 0
@@ -217,16 +220,21 @@ export function Chat({
         handleSubmit={handleSubmit}
       >
         {({ files, setFiles }) => (
-          <MessageInput
-            value={input}
-            onChange={handleInputChange}
-            allowAttachments
-            files={files}
-            setFiles={setFiles}
-            stop={handleStop}
-            isGenerating={isGenerating}
-            transcribeAudio={transcribeAudio}
-          />
+          <>
+            <MessageInput
+              value={input}
+              onChange={handleInputChange}
+              allowAttachments
+              files={files}
+              setFiles={setFiles}
+              stop={handleStop}
+              isGenerating={isGenerating}
+              transcribeAudio={transcribeAudio}
+            />
+            {inputFooter && (
+              <div className="mt-1.5 flex items-center px-1">{inputFooter}</div>
+            )}
+          </>
         )}
       </ChatForm>
     </ChatContainer>

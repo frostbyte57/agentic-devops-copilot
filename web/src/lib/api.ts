@@ -1,4 +1,11 @@
-import type { ProviderInfo, Report, Settings, SettingsUpdate, Step } from "./types";
+import type {
+  ModelOption,
+  ProviderInfo,
+  Report,
+  Settings,
+  SettingsUpdate,
+  Step,
+} from "./types";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
@@ -6,6 +13,15 @@ export async function getProviders(): Promise<ProviderInfo[]> {
   const res = await fetch(`${BASE}/api/providers`);
   if (!res.ok) throw new Error("Failed to load providers");
   return (await res.json()).providers;
+}
+
+/** Models the given provider's stored key can reach. May be empty (no key / offline). */
+export async function getModels(provider: string): Promise<ModelOption[]> {
+  const res = await fetch(`${BASE}/api/models?provider=${encodeURIComponent(provider)}`);
+  if (!res.ok) throw new Error("Failed to load models");
+  const body = await res.json();
+  if (body.error) throw new Error(body.error);
+  return body.models as ModelOption[];
 }
 
 export async function getSettings(): Promise<Settings> {
@@ -25,7 +41,7 @@ export async function saveSettings(s: SettingsUpdate): Promise<Settings> {
 }
 
 export type StreamHandlers = {
-  onMeta?: (m: { provider: string; reasoning_model: string; fast_model: string }) => void;
+  onMeta?: (m: { provider: string; model: string }) => void;
   onStep?: (s: Step) => void;
   onReport?: (r: Report) => void;
   onError?: (message: string) => void;
