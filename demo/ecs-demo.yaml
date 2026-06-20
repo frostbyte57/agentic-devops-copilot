@@ -1,0 +1,114 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Minimal Fargate demo for the AWS DevOps Copilot. Runs one tiny task that
+  continuously logs 503 / timeout / DB-pool errors to /ecs/api-prod and burns
+  CPU, so the copilot's CloudWatch Logs and Metrics nodes have real data to
+  investigate. Everything here is a stack resource, so deleting the stack cleans
+  it all up (service, task, log group).
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC to run in (your default VPC is fine).
+  Subnets:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Public subnets to run the task in (default-VPC subnets are public).
+  ServiceName:
+    Type: String
+    Default: api-prod
+    Description: ECS service name — also the CloudWatch ServiceName dimension.
+  ClusterName:
+    Type: String
+    Default: api-prod-cluster
+    Description: ECS cluster name — also the CloudWatch ClusterName dimension.
+
+Resources:
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/${ServiceName}"
+      RetentionInDays: 1
+
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Ref ClusterName
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ecs-tasks.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${ServiceName}-demo"
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: "256"
+      Memory: "512"
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: app
+          Image: public.ecr.aws/docker/library/busybox:1.36
+          Essential: true
+          EntryPoint: ["sh", "-c"]
+          Command:
+            # Two `yes` loops peg the 0.25-vCPU task (CPUUtilization ~100%);
+            # the foreground loop keeps the container alive and emits errors.
+            - !Sub >-
+                yes >/dev/null & yes >/dev/null &
+                while true; do
+                echo "ERROR 503 upstream connect error from ${ServiceName}: returned 503 after 30000ms timeout";
+                echo "ERROR HikariCP: DB connection pool exhausted, timeout acquiring connection";
+                echo "ERROR 503 ServiceUnavailable: upstream request timeout";
+                sleep 5;
+                done
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: demo
+
+  ServiceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Egress-only SG for the copilot demo task
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+
+  Service:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Ref ServiceName
+      Cluster: !Ref Cluster
+      LaunchType: FARGATE
+      DesiredCount: 1
+      TaskDefinition: !Ref TaskDefinition
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: !Ref Subnets
+          SecurityGroups: [!Ref ServiceSecurityGroup]
+
+Outputs:
+  Region:
+    Value: !Ref AWS::Region
+  ServiceNameOut:
+    Description: Use this as the "service" in the incident.
+    Value: !Ref ServiceName
+  ClusterNameOut:
+    Description: Mention this cluster in the incident to exercise the Metrics node.
+    Value: !Ref ClusterName
+  LogGroupOut:
+    Value: !Ref LogGroup

@@ -43,7 +43,7 @@ def _render_report(report: IncidentReport) -> None:
         body.append("\n[bold]Evidence:[/bold]\n" + "\n".join(f"  • {e}" for e in report.evidence_refs))
     if report.commands_to_run:
         body.append("\n[bold]Commands:[/bold]\n" + "\n".join(f"  $ {c}" for c in report.commands_to_run))
-    console.print(Panel("\n".join(body), title="IncidentReport ✓", border_style="green"))
+    console.print(Panel("\n".join(body), title="IncidentReport", border_style="green"))
 
 
 @app.command()

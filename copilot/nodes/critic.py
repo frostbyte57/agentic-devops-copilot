@@ -23,9 +23,13 @@ def make_critic(deps: Deps):
         evidence = state.get("evidence", [])
         context = "\n".join(f"[{e.source}/{e.severity}] {e.summary}" for e in evidence) or "(no evidence)"
         llm = deps.llm(OPUS, max_tokens=2000).with_structured_output(Critique)
-        critique: Critique = llm.invoke(
-            [("system", CRITIC_SYS), ("human", f"Incident: {state['incident']}\n\nEvidence:\n{context}")]
-        )
-        return {"critique": critique}
+        try:
+            critique = llm.invoke(
+                [("system", CRITIC_SYS), ("human", f"Incident: {state['incident']}\n\nEvidence:\n{context}")]
+            )
+        except Exception:  # noqa: BLE001 — local models may not return valid structured output
+            critique = None
+        # The synthesizer handles a missing critique; don't let a bad parse kill the run.
+        return {"critique": critique if isinstance(critique, Critique) else None}
 
     return run
