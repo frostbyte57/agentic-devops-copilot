@@ -8,12 +8,12 @@ investigates your live AWS environment and returns a structured `IncidentReport`
 flowchart TD
     U([Incident in plain English]) --> P[Planner]
 
-    P --> Logs[CloudWatch Logs]
-    P --> Metrics[Metrics]
+    P --> AWS[AWS investigator]
     P --> GitHub[GitHub diff]
     P --> RAG[Runbooks]
 
-    Logs & Metrics & GitHub & RAG --> Critic
+    AWS -. read-only .-> MCP[AWS API MCP server]
+    AWS & GitHub & RAG --> Critic
     Critic --> Synthesizer
     Synthesizer --> R([IncidentReport])
 ```
@@ -21,8 +21,10 @@ flowchart TD
 1. **Planner** reads the incident, extracts the service and time window, and picks
    which evidence sources to run.
 2. The chosen specialists fan out **in parallel**, each adding `Evidence`:
-   - **CloudWatch Logs** — scans the log group for error/5xx/timeout lines.
-   - **Metrics** — pulls ECS CPU/memory and flags breaches.
+   - **AWS investigator** — a tool-using agent that queries the live account
+     through the [AWS API MCP server](https://github.com/awslabs/mcp/tree/main/src/aws-api-mcp-server)
+     (`call_aws`). It decides which **read-only** AWS calls to make — CloudWatch
+     logs/metrics, ECS, ELB, RDS, etc. — instead of being limited to a fixed set.
    - **GitHub** — diffs the most recent deploy for risky changes (optional).
    - **Runbooks** — retrieves matching runbooks for the symptom.
 3. **Critic** challenges the leading hypothesis and sets a calibrated confidence.
@@ -34,5 +36,7 @@ An optional **Code Executor** can run a small sandboxed Python script between
 gather and critic to quantify a hypothesis.
 
 The copilot runs on a **single model** (default `claude-opus-4-8`), used by every
-LLM node. AWS calls are **read-only**, and all configuration comes from the UI
-settings store — never from environment variables (see [setup.md](./setup.md)).
+LLM node. AWS access is **read-only** — the MCP server runs with
+`READ_OPERATIONS_ONLY` and is bounded by your IAM permissions. All configuration
+comes from the UI settings store — never from environment variables (see
+[setup.md](./setup.md)).

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Optional
 
@@ -13,7 +14,6 @@ from rich.console import Console
 from rich.panel import Panel
 
 from . import providers, settings_store
-from .aws.adapters import AwsAdapters
 from .deps import Deps
 from .graph import build_graph
 from .state import IncidentReport
@@ -23,8 +23,7 @@ console = Console()
 
 _SOURCE_LABEL = {
     "planner": "Agent Planner: breaking into investigation threads",
-    "logs": "CloudWatch Logs",
-    "metrics": "Metrics Fetcher",
+    "aws": "AWS Investigator",
     "github": "GitHub Diff",
     "rag": "RAG (runbooks)",
     "code": "Code Executor",
@@ -72,20 +71,25 @@ def investigate(
     )
 
     deps = Deps(
-        aws=AwsAdapters.from_settings(region=region, profile=profile),
         allow_code_exec=not no_code_exec,
         github_token=settings_store.key("github"),
         github_repo=settings_store.get().get("github_repo"),
+        aws_region=region or settings_store.get().get("region"),
+        aws_profile=profile,
     )
     graph = build_graph(deps)
 
-    final: dict = {}
-    for update in graph.stream({"incident": incident}, stream_mode="updates"):
-        for node, payload in update.items():
-            console.print(f"  → [cyan]{_SOURCE_LABEL.get(node, node)}[/cyan]")
-            for ev in payload.get("evidence", []) or []:
-                console.print(f"     [dim]{ev.source}:[/dim] {ev.summary}")
-            final.update(payload)
+    async def _run() -> dict:
+        acc: dict = {}
+        async for update in graph.astream({"incident": incident}, stream_mode="updates"):
+            for node, payload in update.items():
+                console.print(f"  → [cyan]{_SOURCE_LABEL.get(node, node)}[/cyan]")
+                for ev in payload.get("evidence", []) or []:
+                    console.print(f"     [dim]{ev.source}:[/dim] {ev.summary}")
+                acc.update(payload)
+        return acc
+
+    final = asyncio.run(_run())
 
     report = final.get("report")
     if not isinstance(report, IncidentReport):

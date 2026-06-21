@@ -1,8 +1,9 @@
 # AWS DevOps Copilot
 
 An agentic AWS DevOps copilot. Describe an incident in plain English and a
-multi-agent system investigates your live AWS environment — CloudWatch logs and
-metrics, the most recent deploy, and a runbook corpus — then returns a structured
+multi-agent system investigates your live AWS environment — read-only, via the
+[AWS API MCP server](https://github.com/awslabs/mcp/tree/main/src/aws-api-mcp-server),
+plus the most recent deploy and a runbook corpus — then returns a structured
 **IncidentReport** with a ranked root cause, a recommended fix, and a confidence
 score.
 
@@ -10,10 +11,9 @@ score.
 $ copilot "ECS service api-prod has been returning 503s for 20 minutes"
 
   → Agent Planner: breaking into investigation threads
-  → CloudWatch Logs
-     logs: Repeated DB query timeouts consistent with an N+1 regression.
-  → Metrics Fetcher
-     metrics: CPU: avg 86%, peak 94%
+  → AWS Investigator
+     aws: Repeated DB query timeouts consistent with an N+1 regression.
+     aws: ECS CPU: avg 86%, peak 94%
   → RAG (runbooks)
      rag: Runbook 'high-cpu-ecs' (match 71%)
   → Critic

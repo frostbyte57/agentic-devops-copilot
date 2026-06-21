@@ -2,7 +2,7 @@
 
 Flow: planner fans out (in parallel) to whichever specialist sources it chose;
 the branches rejoin at ``gather``; then code-executor → critic → synthesizer run
-sequentially. ``build_graph(deps)`` injects the AWS adapters + LLM factory, so the
+sequentially. ``build_graph(deps)`` injects the LLM factory + AWS config, so the
 same graph is used in production and in tests (with stubs).
 """
 
@@ -11,17 +11,16 @@ from __future__ import annotations
 from langgraph.graph import END, START, StateGraph
 
 from .deps import Deps
-from .nodes.cloudwatch_logs import make_logs_node
+from .nodes.aws_investigator import make_aws_investigator
 from .nodes.code_executor import make_code_executor
 from .nodes.critic import make_critic
 from .nodes.github_diff import make_github_node
-from .nodes.metrics import make_metrics_node
 from .nodes.planner import make_planner
 from .nodes.rag import make_rag_node
 from .nodes.synthesizer import make_synthesizer
 from .state import State
 
-_SOURCE_TO_NODE = {"logs": "logs", "metrics": "metrics", "github": "github", "rag": "rag"}
+_SOURCE_TO_NODE = {"aws": "aws", "github": "github", "rag": "rag"}
 
 
 def _fan_out(state: State) -> list[str]:
@@ -34,8 +33,7 @@ def build_graph(deps: Deps):
     g = StateGraph(State)
 
     g.add_node("planner", make_planner(deps))
-    g.add_node("logs", make_logs_node(deps))
-    g.add_node("metrics", make_metrics_node(deps))
+    g.add_node("aws", make_aws_investigator(deps))
     g.add_node("github", make_github_node(deps))
     g.add_node("rag", make_rag_node(deps))
     g.add_node("gather", lambda state: {})  # join point for the parallel branches
@@ -44,8 +42,8 @@ def build_graph(deps: Deps):
     g.add_node("synthesizer", make_synthesizer(deps))
 
     g.add_edge(START, "planner")
-    g.add_conditional_edges("planner", _fan_out, ["logs", "metrics", "github", "rag"])
-    for node in ("logs", "metrics", "github", "rag"):
+    g.add_conditional_edges("planner", _fan_out, ["aws", "github", "rag"])
+    for node in ("aws", "github", "rag"):
         g.add_edge(node, "gather")
     g.add_edge("gather", "code")
     g.add_edge("code", "critic")
