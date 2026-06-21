@@ -45,10 +45,8 @@ investigate "..."`.)
 
 | Doc | What's in it |
 | --- | --- |
-| [docs/architecture.md](docs/architecture.md) | How it works — the agent graph + Mermaid diagrams |
-| [docs/setup.md](docs/setup.md) | Install, extras, read-only AWS IAM, running tests |
-| [docs/providers.md](docs/providers.md) | Choosing a model provider (Anthropic / OpenAI / local) |
-| [docs/cli.md](docs/cli.md) | Running from the command line |
-| [docs/web-ui.md](docs/web-ui.md) | Running the web app, `make` targets, persistence, build |
-| [docs/security.md](docs/security.md) | Read-only AWS, credential handling, the code sandbox |
-| [demo/README.md](demo/README.md) | One-command CloudFormation demo to test against real AWS |
+| [docs/architecture.md](docs/architecture.md) | How it works — the agent graph |
+| [docs/setup.md](docs/setup.md) | Install, model providers, read-only AWS, tests |
+| [docs/usage.md](docs/usage.md) | Running the web UI and the CLI |
+| [docs/security.md](docs/security.md) | Read-only AWS, credentials, the code sandbox |
+| [demo/README.md](demo/README.md) | One-command CloudFormation demo on real AWS |
