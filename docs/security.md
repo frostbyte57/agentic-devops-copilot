@@ -1,10 +1,10 @@
 # Security notes
 
-- **Read-only AWS.** The copilot only makes read-only data-plane calls
-  (CloudWatch Logs/Metrics, ECS describe/list). Scope the key or role you give it
-  to the actions in [setup.md](./setup.md); nothing in the code can escalate
-  beyond that. Leave the AWS fields blank to use your host's default credential
-  chain instead.
+- **Read-only AWS.** AWS access goes through the AWS API MCP server, launched with
+  `READ_OPERATIONS_ONLY=true`, so it refuses mutating calls — and it can only ever
+  do what the credentials' IAM allows. Two guards: the read-only flag and your IAM
+  policy (see [setup.md](./setup.md)). Leave the AWS fields blank to use your
+  host's default credential chain instead.
 
 - **Credentials stay in the settings store.** Keys and AWS credentials entered in
   the UI are written to `~/.config/aws-devops-copilot/settings.json` (a `0600`

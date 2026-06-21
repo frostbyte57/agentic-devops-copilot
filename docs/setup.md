@@ -32,15 +32,17 @@ best reports, prefer Anthropic or a strong instruct model.
 
 ## AWS access (read-only)
 
-The copilot only makes read-only data-plane calls. The key or role needs:
+The AWS investigator reaches your account through the
+[AWS API MCP server](https://github.com/awslabs/mcp/tree/main/src/aws-api-mcp-server)
+(installed with the copilot), launched with `READ_OPERATIONS_ONLY=true` — it can
+call **any** read AWS API your IAM allows, but never a mutating one. Scope is set
+by your IAM policy, not a hardcoded command list.
 
-```
-logs:StartQuery, logs:GetQueryResults, logs:StopQuery,
-cloudwatch:GetMetricData, ecs:Describe*, ecs:List*,
-elasticloadbalancing:Describe*
-```
+Give it a key or role with read access to whatever you want it to investigate. The
+AWS managed `ReadOnlyAccess` policy works; a smaller starting point covering the
+demo (CloudWatch logs/metrics, ECS, ELB) is at
+[`demo/copilot-readonly-policy.json`](../demo/copilot-readonly-policy.json).
 
-A ready policy is at [`demo/copilot-readonly-policy.json`](../demo/copilot-readonly-policy.json).
 Leave the AWS fields blank in the UI to use your host's default credential chain.
 
 ## Test

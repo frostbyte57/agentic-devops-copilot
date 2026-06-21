@@ -93,7 +93,7 @@ def test_aws_credentials_persist_and_are_redacted():
     assert got["has_aws_credentials"] is True
     # ...but the secret values are never returned.
     assert not any("SECRET" in str(v) for v in got.values())
-    # stored for the boto3 session to pick up
+    # stored for the read-only AWS MCP server to pick up
     assert settings_store.key("aws_access_key_id") == "AKIA_SECRET"
     assert settings_store.key("aws_secret_access_key") == "aws-secret-SECRET"
 

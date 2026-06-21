@@ -5,12 +5,18 @@
       "Sid": "CopilotReadOnly",
       "Effect": "Allow",
       "Action": [
+        "logs:Describe*",
+        "logs:Get*",
+        "logs:List*",
+        "logs:FilterLogEvents",
         "logs:StartQuery",
-        "logs:GetQueryResults",
         "logs:StopQuery",
-        "cloudwatch:GetMetricData",
-        "ecs:DescribeServices",
-        "ecs:ListServices"
+        "cloudwatch:Describe*",
+        "cloudwatch:Get*",
+        "cloudwatch:List*",
+        "ecs:Describe*",
+        "ecs:List*",
+        "elasticloadbalancing:Describe*"
       ],
       "Resource": "*"
     }

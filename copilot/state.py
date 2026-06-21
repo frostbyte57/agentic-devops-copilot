@@ -13,7 +13,7 @@ from typing import Annotated, Literal, Optional
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
-Source = Literal["logs", "metrics", "github", "rag"]
+Source = Literal["aws", "github", "rag"]
 
 
 class InvestigationThread(BaseModel):

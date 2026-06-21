@@ -1,8 +1,8 @@
 # Demo environment (AWS Fargate)
 
 Stands up one tiny Fargate task that **continuously logs 503 / timeout / DB-pool
-errors** and **burns CPU**, so the **Logs** and **Metrics** nodes have real data
-to find. It's a single CloudFormation stack, so teardown is one command.
+errors** and **burns CPU**, so the AWS investigator has real logs and metrics to
+find. It's a single CloudFormation stack, so teardown is one command.
 
 - Cluster `api-prod-cluster` · Service `api-prod` · Log group `/ecs/api-prod`
 - Cost ≈ **$0.30/day** while running — delete it when done.
@@ -39,11 +39,11 @@ Send in the chat bar:
 
 > **ECS service api-prod in cluster api-prod-cluster returning 503s and high CPU for 20 minutes**
 
-**Logs** is the deterministic signal — it finds the seeded errors every run.
-**Metrics** shows CPU ~100% when the planner carries the cluster name into the
-metrics thread (`AWS/ECS` metrics need both `ClusterName` and `ServiceName`),
-which is why the incident names the cluster. Give metrics a few minutes to
-populate.
+The **AWS investigator** queries the live account read-only (via the AWS API MCP
+server): it scans CloudWatch Logs for the seeded 503/timeout/DB errors and pulls
+ECS CPU/memory, then the **runbooks** and **synthesizer** finish the report.
+Naming the cluster helps it find the `AWS/ECS` metrics (which need both
+`ClusterName` and `ServiceName`); give metrics a few minutes to populate.
 
 ## 4. Tear down
 

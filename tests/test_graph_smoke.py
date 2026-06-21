@@ -1,17 +1,21 @@
 """End-to-end smoke test: the graph compiles and runs with stubbed AWS + LLM.
 
-No AWS account and no ANTHROPIC_API_KEY required — the AWS adapter is a stub with
-recorded-style responses, and the LLM factory returns deterministic objects. This
-exercises the planner → fan-out → gather → code → critic → synthesizer wiring and
-asserts a well-formed IncidentReport comes out.
+No AWS account and no ANTHROPIC_API_KEY required — the AWS investigator is an
+injected stub (so the MCP subprocess and a tool-using model are never touched), and
+the LLM factory returns deterministic objects. This exercises the
+planner → fan-out → gather → code → critic → synthesizer wiring and asserts a
+well-formed IncidentReport comes out.
 """
 
 from __future__ import annotations
+
+import asyncio
 
 from copilot.deps import Deps
 from copilot.graph import build_graph
 from copilot.state import (
     Critique,
+    Evidence,
     IncidentReport,
     InvestigationThread,
     PlannerOutput,
@@ -30,8 +34,7 @@ class _FakeStructured:
                 service="api-prod",
                 window_minutes=20,
                 threads=[
-                    InvestigationThread(source="logs", rationale="pull errors", params={"log_group": "/ecs/api-prod"}),
-                    InvestigationThread(source="metrics", rationale="check CPU"),
+                    InvestigationThread(source="aws", rationale="inspect logs + metrics"),
                     InvestigationThread(source="rag", rationale="match runbook"),
                 ],
             )
@@ -68,27 +71,26 @@ def _fake_llm_factory(model="claude-opus-4-8", max_tokens=8000, thinking=False, 
     return _FakeLLM(model)
 
 
-class _StubAws:
-    def logs_insights(self, log_group, window_minutes, **_):
-        return [{"@message": "ERROR db query timeout after 5000ms"} for _ in range(12)]
-
-    def metric_series(self, service, cluster, window_minutes, **_):
-        return {"cpu": [70, 88, 94, 91], "mem": [60, 80, 87, 85]}
-
-    def describe_service(self, service, cluster):
-        return {"serviceName": service, "desiredCount": 2}
+async def _stub_investigate(state, deps):
+    """Stand-in for the MCP-backed AWS agent — canned read-only findings."""
+    return [
+        Evidence(source="aws", summary="Repeated DB query timeouts in CloudWatch Logs.", severity="critical"),
+        Evidence(source="aws", summary="ECS CPU: avg 88%, peak 94%.", severity="critical"),
+    ]
 
 
 def test_graph_produces_report():
-    deps = Deps(aws=_StubAws(), llm=_fake_llm_factory, allow_code_exec=False)
+    deps = Deps(llm=_fake_llm_factory, allow_code_exec=False, aws_investigator=_stub_investigate)
     graph = build_graph(deps)
 
-    result = graph.invoke({"incident": "ECS service api-prod has been returning 503s for 20 minutes"})
+    result = asyncio.run(
+        graph.ainvoke({"incident": "ECS service api-prod has been returning 503s for 20 minutes"})
+    )
 
     report = result["report"]
     assert isinstance(report, IncidentReport)
     assert report.confidence == 0.91
     assert "select_related" in report.recommended_fix
-    # planner picked logs+metrics+rag; each should have appended evidence
+    # planner picked aws + rag; each should have appended evidence
     sources = {e.source for e in result["evidence"]}
-    assert {"logs", "metrics", "rag"} <= sources
+    assert {"aws", "rag"} <= sources

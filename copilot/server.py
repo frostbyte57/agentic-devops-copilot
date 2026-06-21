@@ -29,7 +29,6 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from . import providers, settings_store
-from .aws.adapters import AwsAdapters
 from .deps import Deps
 from .graph import build_graph
 from .state import IncidentReport
@@ -49,8 +48,7 @@ app.add_middleware(
 
 _SOURCE_LABEL = {
     "planner": "Planner",
-    "logs": "CloudWatch Logs",
-    "metrics": "Metrics",
+    "aws": "AWS Investigator",
     "github": "GitHub Diff",
     "rag": "Runbooks (RAG)",
     "code": "Code Executor",
@@ -229,20 +227,20 @@ def _sse(event: str, data: dict) -> str:
 def investigate(req: InvestigateRequest) -> StreamingResponse:
     """Stream node updates then the final report as SSE."""
 
-    def gen():
+    async def gen():
         try:
             cfg = providers.resolve()
             yield _sse("meta", {"provider": cfg.name, "model": cfg.model})
             deps = Deps(
-                aws=AwsAdapters.from_settings(),
                 allow_code_exec=bool(_store.get("allow_code_exec", True)),
                 github_token=settings_store.key("github"),
                 github_repo=_store.get("github_repo"),
+                aws_region=_store.get("region"),
             )
             graph = build_graph(deps)
 
             final: dict = {}
-            for update in graph.stream({"incident": req.incident}, stream_mode="updates"):
+            async for update in graph.astream({"incident": req.incident}, stream_mode="updates"):
                 for node, payload in update.items():
                     yield _sse(
                         "step",
